@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "WiFi.h"
+#include "ArduinoOTA.h"
 // NeoPixel Ring simple sketch (c) 2013 Shae Erisson
 // Released under the GPLv3 license to match the rest of the
 // Adafruit NeoPixel library
@@ -29,6 +31,8 @@ Adafruit_NeoPixel pixels_gauche(NUMPIXELS_GAUCHE, PIN_G, NEO_GRB + NEO_KHZ800);
 
 #define DELAYVAL 20 // Time (in milliseconds) to pause between pixels
 int address = 0;
+
+String wifi_ssid = "Joelette_2";
 
 void premierBandeau(int r, int g, int b)
 {
@@ -181,11 +185,74 @@ void allOn(int r, int g, int b)
   pixels_gauche.show();
 }
 
+void initOTA()
+{
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(wifi_ssid);
+
+  Serial.print("local IP address: ");
+  Serial.println(WiFi.softAPIP());
+
+  // Port defaults to 3232
+  ArduinoOTA.setPort(3232);
+
+  // Hostname defaults to esp3232-[MAC]
+  ArduinoOTA.setHostname("myesp32-OTA");
+
+  // No authentication by default
+  // ArduinoOTA.setPassword("admin");
+
+  // Password can be set with it's md5 value as well
+  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
+  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
+  ArduinoOTA
+      .onStart([]()
+               {
+			String type;
+			if (ArduinoOTA.getCommand() == U_FLASH)
+				type = "sketch";
+			else // U_SPIFFS
+				type = "filesystem";
+
+			// NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+			Serial.println("Start updating " + type); })
+      .onEnd([]()
+             { Serial.println("\nEnd"); })
+      .onProgress([](unsigned int progress, unsigned int total)
+                  { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); })
+      .onError([](ota_error_t error)
+               {
+			Serial.printf("Error[%u]: ", error);
+			if (error == OTA_AUTH_ERROR)
+				Serial.println("Auth Failed");
+			else if (error == OTA_BEGIN_ERROR)
+				Serial.println("Begin Failed");
+			else if (error == OTA_CONNECT_ERROR)
+				Serial.println("Connect Failed");
+			else if (error == OTA_RECEIVE_ERROR)
+				Serial.println("Receive Failed");
+			else if (error == OTA_END_ERROR)
+				Serial.println("End Failed"); });
+
+  ArduinoOTA.setTimeout(60000);
+  ArduinoOTA.begin();
+
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
 void setup()
 {
+  Serial.begin(115200);
+
+  initOTA();
+
+  // Mise en mémoire du bootcount qui sert à choisir l'animation.
   EEPROM.begin(EEPROM_SIZE);
   EEPROM.get(address, bootcount);
 
+  // Si le bootcount est supérieur à 4 on le remet à zero pour cycler sur les animations
   if (bootcount > 4 || bootcount < 0)
   {
     bootcount = 0;
@@ -208,6 +275,8 @@ void setup()
 
 void loop()
 {
+	ArduinoOTA.handle();
+  // Animation à modifier selon envie.
   switch (bootcount)
   {
   case 0:
@@ -233,30 +302,4 @@ void loop()
   default:
     break;
   }
-  // rainbowDouble(10);
-  // RunningLights(100,0,0,50);
-  // theaterChase(100, 0, 0, 100);
-
-  /*
-  pixels.clear(); // Set all pixel colors to 'off'
-  pixels2.clear(); // Set all pixel colors to 'off'
-
-  // The first NeoPixel in a strand is #0, second is 1, all the way up
-  // to the count of pixels minus one.
-  for(int i=0; i<NUMPIXELS; i++) { // For each pixel...
-
-    // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
-    // Here we're using a moderately bright green color:
-    pixels.setPixelColor(i, pixels.Color(0, 100, 0));
-
-    pixels.show();   // Send the updated pixel colors to the hardware.
-    pixels2.setPixelColor(i, pixels.Color(100, 0, 0));
-
-    pixels2.show();   // Send the updated pixel colors to the hardware.
-
-    delay(DELAYVAL); // Pause before next pass through loop
-  }
-  */
-  // rainbowCycleDroite(10);
-  // rainbowCycleGauche(10);
 }
